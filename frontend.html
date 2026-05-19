@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Apple Hardware Analyser</title>
+    <meta name="description"
+        content="Diagnose your Apple hardware issues and find out if they can be repaired to reduce e-waste.">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Link the CSS file correctly from Flask's static folder -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+
+    <nav class="navbar">
+        <div class="navbar__container">
+            <a href="/" id="navbar__logo">Apple Hardware Diagnosis</a>
+            <div class="navbar__toggle" id="mobile-menu">
+                <span class="bar"></span>
+                <span class="bar"></span>
+                <span class="bar"></span>
+            </div>
+            <ul class="navbar__menu">
+                <li class="navbar__item"><a href="/" class="navbar__links">Diagnose</a></li>
+                <li class="navbar__item"><a href="/about.html" class="navbar__links">About</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="quiz-container">
+        <h1>Apple Hardware Analyser</h1>
+        <p>Determines if your broken device has an easy fix, and can be kept out of the ever-growing e-waste landfills.
+        </p>
+
+        <form method="POST" action="/" id="diagnosis-form">
+            <!-- Hidden inputs to act as our data store -->
+            <input type="hidden" name="device_type" id="hidden_device" value="">
+            <input type="hidden" name="user_question" id="hidden_issue" value="">
+
+            <!-- Step 1: Device Selection -->
+            <div id="step-1" class="quiz-step active-step">
+                <h2 class="step-heading">What device do you need help with?</h2>
+                <div class="device-grid">
+                    <button type="button" class="quiz-card" data-device="macbook">
+                        <span class="emoji">💻</span>
+                        <span class="label">MacBook / Mac</span>
+                    </button>
+                    <button type="button" class="quiz-card" data-device="iphone">
+                        <span class="emoji">📱</span>
+                        <span class="label">iPhone / iPad</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2: Issue Selection -->
+            <div id="step-2" class="quiz-step hidden">
+                <button type="button" class="back-btn" id="back-to-step-1">← Back to Devices</button>
+                <h2 class="step-heading">What seems to be the issue?</h2>
+                <div class="issue-grid" id="issue-container">
+                    <!-- Javascript will inject issue buttons here -->
+                </div>
+
+                <div class="custom-issue-container">
+                    <textarea name="custom_query" id="custom_query"
+                        placeholder="My issue isn't listed here... (describe it briefly)" rows="3"></textarea>
+                </div>
+
+                <button type="submit" id="analyze-btn" class="analyze-btn" disabled>Analyze Issue</button>
+            </div>
+        </form>
+
+        <!-- Step 3: Loading State -->
+        <div id="loading-section" class="loading-section">
+            <div class="spinner"></div>
+            <p class="loading-text">Generating response... please wait (up to 30 seconds).</p>
+        </div>
+
+        <!-- Step 3: Results -->
+        <div id="results-section" class="results-section">
+            <div id="results-card" class="results-card">
+                <div class="results-card__header">
+                    <span class="results-card__icon" id="results-icon">🔍</span>
+                    <span class="results-card__title" id="results-title">Diagnosis Complete</span>
+                </div>
+                <div class="results-card__body" id="results-body">
+                    <!-- API response text goes here -->
+                </div>
+                <div class="repairability-section" id="repairability-section" style="display: none;">
+                    <div class="repair-header">
+                        <span class="repair-title">Severity Score: <span id="repair-score-text">0</span>/10</span>
+                        <span id="repair-label" class="repair-label"></span>
+                    </div>
+                    <div class="slider-bg">
+                        <div id="repair-slider-fill" class="slider-fill"></div>
+                    </div>
+                </div>
+                <div class="results-card__footer">
+                    <button type="button" class="restart-btn" id="diagnose-another-btn">Diagnose Another
+                        Device</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const allOptions = {
+            "macbook": [
+                { value: "flashing folder", text: "Blinking folder with question mark (Can't find hard drive)" },
+                { value: "circle with slash", text: "Circle with a slash symbol (Software corrupted)" },
+                { value: "padlock icon", text: "Padlock screen on startup (Firmware locked)" },
+                { value: "kernel panic", text: "Computer randomly restarts saying 'Because of a problem'" },
+                { value: "target disk mode", text: "Stuck on floating lightning bolt/firewire logo" },
+                { value: "1 beep", text: "1 Beep every 5 seconds (Missing memory)" },
+                { value: "3 beeps", text: "3 Beeps on startup (Memory failure)" },
+                { value: "sos beeps", text: "3 quick, 3 long, 3 quick beeps (Software rescue mode)" },
+                { value: "flexgate", text: "Screen backlight is uneven or goes dark when opened too far" },
+                { value: "fan spin no chime", text: "Fans spin super loud but screen is black and no sound" }
+            ],
+            "iphone": [
+                { value: "error 4013", text: "Constant Restarting / Error 4013 (Stuck turning on)" },
+                { value: "error 9", text: "Fails to update with Error 9 (Storage chip dead)" },
+                { value: "error 14", text: "Update gets stuck with Error 14 (Storage is 100% full)" },
+                { value: "error 4014", text: "Error 4014 on computer (Main processor dead)" },
+                { value: "error -1", text: "Error -1 on computer (Cellular modem broken)" },
+                { value: "boot loop", text: "Apple logo shows up, then goes black, forever (Boot loop)" },
+                { value: "panic full", text: "Phone randomly turns off while using it (Panic full)" },
+                { value: "no face id", text: "Face ID is not available warning" },
+                { value: "important battery message", text: "Important Battery Message (Unknown part)" },
+                { value: "no service", text: "Says 'No Service' even with no SIM card" },
+                { value: "pink screen", text: "Screen flashes bright pink before restarting" },
+                { value: "ghost touch", text: "Screen clicks and types all by itself (Ghost touch)" },
+                { value: "green line", text: "Bright green vertical line stuck on screen" },
+                { value: "unable to activate", text: "Stuck on 'Unable to Activate' during setup" },
+                { value: "audio ic disease", text: "Voice Memos greyed out, calls don't work (Audio IC)" }
+            ]
+        };
+
+        // DOM references
+        const step1 = document.getElementById('step-1');
+        const step2 = document.getElementById('step-2');
+        const hiddenDevice = document.getElementById('hidden_device');
+        const hiddenIssue = document.getElementById('hidden_issue');
+        const issueContainer = document.getElementById('issue-container');
+        const customQuery = document.getElementById('custom_query');
+        const analyzeBtn = document.getElementById('analyze-btn');
+        const backBtn = document.getElementById('back-to-step-1');
+        const loadingSection = document.getElementById('loading-section');
+        const resultsSection = document.getElementById('results-section');
+        const resultsCard = document.getElementById('results-card');
+        const resultsIcon = document.getElementById('results-icon');
+        const resultsTitle = document.getElementById('results-title');
+        const resultsBody = document.getElementById('results-body');
+        const diagnoseAnotherBtn = document.getElementById('diagnose-another-btn');
+        const form = document.getElementById('diagnosis-form');
+
+        // --- Step 1: Device Selection ---
+        document.querySelectorAll('.quiz-card[data-device]').forEach(card => {
+            card.addEventListener('click', function () {
+                hiddenDevice.value = this.dataset.device;
+                hiddenIssue.value = '';
+                customQuery.value = '';
+
+                renderIssues(this.dataset.device);
+
+                step1.classList.remove('active-step');
+                step1.classList.add('hidden');
+                step2.classList.remove('hidden');
+                step2.classList.add('active-step');
+
+                // Hide any previous results when re-entering the flow
+                resultsSection.classList.remove('visible');
+                loadingSection.classList.remove('visible');
+
+                checkSubmitState();
+            });
+        });
+
+        // --- Back Button ---
+        backBtn.addEventListener('click', () => {
+            step2.classList.remove('active-step');
+            step2.classList.add('hidden');
+            step1.classList.remove('hidden');
+            step1.classList.add('active-step');
+        });
+
+        // --- Render Issue Buttons ---
+        function renderIssues(device) {
+            issueContainer.innerHTML = '';
+            const options = allOptions[device] || [];
+
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'issue-card';
+                btn.textContent = opt.text;
+                btn.dataset.value = opt.value;
+
+                btn.addEventListener('click', function () {
+                    document.querySelectorAll('.issue-card').forEach(b => b.classList.remove('selected'));
+                    this.classList.add('selected');
+                    hiddenIssue.value = this.dataset.value;
+                    customQuery.value = '';
+                    checkSubmitState();
+                });
+
+                issueContainer.appendChild(btn);
+            });
+        }
+
+        // --- Custom Text Box ---
+        customQuery.addEventListener('input', function () {
+            if (this.value.trim().length > 0) {
+                document.querySelectorAll('.issue-card').forEach(b => b.classList.remove('selected'));
+                hiddenIssue.value = 'custom_cloud';
+            } else {
+                hiddenIssue.value = '';
+            }
+            checkSubmitState();
+        });
+
+        // --- Submit State Check ---
+        function checkSubmitState() {
+            analyzeBtn.disabled = !(hiddenDevice.value && (hiddenIssue.value || customQuery.value.trim().length > 0));
+        }
+
+        // --- Form Submission (AJAX) ---
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            // Hide step 2, show loading
+            step2.classList.remove('active-step');
+            step2.classList.add('hidden');
+            resultsSection.classList.remove('visible');
+            loadingSection.classList.add('visible');
+
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('/', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                // Show results
+                loadingSection.classList.remove('visible');
+                resultsCard.classList.remove('error-card');
+                resultsIcon.textContent = '✅';
+                resultsTitle.textContent = 'Diagnosis Complete';
+                resultsBody.textContent = data.response;
+
+                // Repairability Logic
+                const score = data.repairability_score || 0;
+                document.getElementById('repair-score-text').textContent = score;
+                const fill = document.getElementById('repair-slider-fill');
+                const label = document.getElementById('repair-label');
+                document.getElementById('repairability-section').style.display = 'block';
+
+                setTimeout(() => {
+                    fill.style.width = (score * 10) + '%';
+                }, 100);
+
+                if (score >= 8) {
+                    fill.style.backgroundColor = '#ff3b30'; // Red
+                    label.textContent = 'High Severity';
+                    label.style.color = '#ff3b30';
+                } else if (score >= 4) {
+                    fill.style.backgroundColor = '#ff9500'; // Orange
+                    label.textContent = 'Moderate Severity';
+                    label.style.color = '#ff9500';
+                } else {
+                    fill.style.backgroundColor = '#34c759'; // Green
+                    label.textContent = 'Low Severity (Easy Fix)';
+                    label.style.color = '#34c759';
+                }
+
+                resultsSection.classList.add('visible');
+
+            } catch (error) {
+                loadingSection.classList.remove('visible');
+                resultsCard.classList.add('error-card');
+                resultsIcon.textContent = '⚠️';
+                resultsTitle.textContent = 'Connection Error';
+                resultsBody.textContent = 'Error connecting to server. Please try again.';
+                document.getElementById('repairability-section').style.display = 'none';
+                resultsSection.classList.add('visible');
+            }
+        });
+
+        // --- Diagnose Another ---
+        diagnoseAnotherBtn.addEventListener('click', () => {
+            // Reset everything
+            hiddenDevice.value = '';
+            hiddenIssue.value = '';
+            customQuery.value = '';
+            analyzeBtn.disabled = true;
+            analyzeBtn.textContent = 'Analyze Issue';
+
+            // Reset slider for next diagnosis
+            document.getElementById('repairability-section').style.display = 'none';
+            document.getElementById('repair-slider-fill').style.width = '0%';
+
+            resultsSection.classList.remove('visible');
+            step1.classList.remove('hidden');
+            step1.classList.add('active-step');
+        });
+    </script>
+</body>
+
+</html>
