@@ -3,9 +3,6 @@
 
 <head>
     <title>Apple Hardware Analyser</title>
-    <meta name="description"
-        content="Diagnose your Apple hardware issues and find out if they can be repaired to reduce e-waste.">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Link the CSS file correctly from Flask's static folder -->
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
@@ -27,79 +24,42 @@
         </div>
     </nav>
 
-    <div class="quiz-container">
-        <h1>Apple Hardware Analyser</h1>
-        <p>Determines if your broken device has an easy fix, and can be kept out of the ever-growing e-waste landfills.
-        </p>
+    <h1>Apple Hardware Analyser</h1>
 
-        <form method="POST" action="/" id="diagnosis-form">
-            <!-- Hidden inputs to act as our data store -->
-            <input type="hidden" name="device_type" id="hidden_device" value="">
-            <input type="hidden" name="user_question" id="hidden_issue" value="">
+    <p>Determines if your broken device has an easy fix, and can be kept out of the ever-growing e-waste landfills.</p>
 
-            <!-- Step 1: Device Selection -->
-            <div id="step-1" class="quiz-step active-step">
-                <h2 class="step-heading">What device do you need help with?</h2>
-                <div class="device-grid">
-                    <button type="button" class="quiz-card" data-device="macbook">
-                        <span class="emoji">💻</span>
-                        <span class="label">MacBook / Mac</span>
-                    </button>
-                    <button type="button" class="quiz-card" data-device="iphone">
-                        <span class="emoji">📱</span>
-                        <span class="label">iPhone / iPad</span>
-                    </button>
-                </div>
-            </div>
+    <form method="POST" action="/">
+        <label for="device_type">SELECT DEVICE:</label>
+        <select name="device_type" id="device_type" required>
+            <option value="macbook">Apple MacBook / Mac</option>
+            <option value="iphone">Apple iPhone / iPad</option>
+        </select>
 
-            <!-- Step 2: Issue Selection -->
-            <div id="step-2" class="quiz-step hidden">
-                <button type="button" class="back-btn" id="back-to-step-1">← Back to Devices</button>
-                <h2 class="step-heading">What seems to be the issue?</h2>
-                <div class="issue-grid" id="issue-container">
-                    <!-- Javascript will inject issue buttons here -->
-                </div>
+        <br><br>
 
-                <div class="custom-issue-container">
-                    <textarea name="custom_query" id="custom_query"
-                        placeholder="My issue isn't listed here... (describe it briefly)" rows="3"></textarea>
-                </div>
+        <label for="user_question">SELECT YOUR ISSUE:</label>
+        <select name="user_question" id="user_question" required>
+            <!-- Javascript will populate this -->
+        </select>
 
-                <button type="submit" id="analyze-btn" class="analyze-btn" disabled>Analyze Issue</button>
-            </div>
-        </form>
-
-        <!-- Step 3: Loading State -->
-        <div id="loading-section" class="loading-section">
-            <div class="spinner"></div>
-            <p class="loading-text">Generating response... please wait (up to 30 seconds).</p>
+        <div id="custom_input_block" style="display:none; margin-top:15px;">
+            <textarea name="custom_query" placeholder="Describe your issue in simple words..." rows="5"
+                cols="40"></textarea>
         </div>
 
-        <!-- Step 3: Results -->
-        <div id="results-section" class="results-section">
-            <div id="results-card" class="results-card">
-                <div class="results-card__header">
-                    <span class="results-card__icon" id="results-icon">🔍</span>
-                    <span class="results-card__title" id="results-title">Diagnosis Complete</span>
-                </div>
-                <div class="results-card__body" id="results-body">
-                    <!-- API response text goes here -->
-                </div>
-                <div class="repairability-section" id="repairability-section" style="display: none;">
-                    <div class="repair-header">
-                        <span class="repair-title">Severity Score: <span id="repair-score-text">0</span>/10</span>
-                        <span id="repair-label" class="repair-label"></span>
-                    </div>
-                    <div class="slider-bg">
-                        <div id="repair-slider-fill" class="slider-fill"></div>
-                    </div>
-                </div>
-                <div class="results-card__footer">
-                    <button type="button" class="restart-btn" id="diagnose-another-btn">Diagnose Another
-                        Device</button>
-                </div>
-            </div>
-        </div>
+
+
+        <br><br>
+        <button type="submit">Analyze</button>
+    </form>
+
+    <div id="loading-indicator" style="display: none; margin-top: 20px;">
+        <p><i>Scanning Neural Cloud... please wait.</i></p>
+    </div>
+
+    <div id="output-container" style="display: none; margin-top: 20px;">
+        <h2>Output:</h2>
+        <pre id="api-output" style="white-space: pre-wrap; font-family: monospace;"></pre>
     </div>
 
     <script>
@@ -135,107 +95,67 @@
             ]
         };
 
-        // DOM references
-        const step1 = document.getElementById('step-1');
-        const step2 = document.getElementById('step-2');
-        const hiddenDevice = document.getElementById('hidden_device');
-        const hiddenIssue = document.getElementById('hidden_issue');
-        const issueContainer = document.getElementById('issue-container');
-        const customQuery = document.getElementById('custom_query');
-        const analyzeBtn = document.getElementById('analyze-btn');
-        const backBtn = document.getElementById('back-to-step-1');
-        const loadingSection = document.getElementById('loading-section');
-        const resultsSection = document.getElementById('results-section');
-        const resultsCard = document.getElementById('results-card');
-        const resultsIcon = document.getElementById('results-icon');
-        const resultsTitle = document.getElementById('results-title');
-        const resultsBody = document.getElementById('results-body');
-        const diagnoseAnotherBtn = document.getElementById('diagnose-another-btn');
-        const form = document.getElementById('diagnosis-form');
+        const deviceSelect = document.getElementById('device_type');
+        const issueSelect = document.getElementById('user_question');
+        const customBlock = document.getElementById('custom_input_block');
 
-        // --- Step 1: Device Selection ---
-        document.querySelectorAll('.quiz-card[data-device]').forEach(card => {
-            card.addEventListener('click', function () {
-                hiddenDevice.value = this.dataset.device;
-                hiddenIssue.value = '';
-                customQuery.value = '';
+        function updateIssues() {
+            // Clear out existing options
+            issueSelect.innerHTML = '';
 
-                renderIssues(this.dataset.device);
-
-                step1.classList.remove('active-step');
-                step1.classList.add('hidden');
-                step2.classList.remove('hidden');
-                step2.classList.add('active-step');
-
-                // Hide any previous results when re-entering the flow
-                resultsSection.classList.remove('visible');
-                loadingSection.classList.remove('visible');
-
-                checkSubmitState();
-            });
-        });
-
-        // --- Back Button ---
-        backBtn.addEventListener('click', () => {
-            step2.classList.remove('active-step');
-            step2.classList.add('hidden');
-            step1.classList.remove('hidden');
-            step1.classList.add('active-step');
-        });
-
-        // --- Render Issue Buttons ---
-        function renderIssues(device) {
-            issueContainer.innerHTML = '';
+            // Get selected device
+            const device = deviceSelect.value;
             const options = allOptions[device] || [];
 
+            // Populate new options
             options.forEach(opt => {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'issue-card';
-                btn.textContent = opt.text;
-                btn.dataset.value = opt.value;
-
-                btn.addEventListener('click', function () {
-                    document.querySelectorAll('.issue-card').forEach(b => b.classList.remove('selected'));
-                    this.classList.add('selected');
-                    hiddenIssue.value = this.dataset.value;
-                    customQuery.value = '';
-                    checkSubmitState();
-                });
-
-                issueContainer.appendChild(btn);
+                const el = document.createElement('option');
+                el.value = opt.value;
+                el.textContent = opt.text;
+                issueSelect.appendChild(el);
             });
+
+            // Add the custom override option at the bottom
+            const customEl = document.createElement('option');
+            customEl.value = 'custom_cloud';
+            customEl.textContent = 'My issue is not listed here (I will type it)';
+            issueSelect.appendChild(customEl);
+
+            // Trigger change event to update the textarea visibility
+            issueSelect.dispatchEvent(new Event('change'));
         }
 
-        // --- Custom Text Box ---
-        customQuery.addEventListener('input', function () {
-            if (this.value.trim().length > 0) {
-                document.querySelectorAll('.issue-card').forEach(b => b.classList.remove('selected'));
-                hiddenIssue.value = 'custom_cloud';
-            } else {
-                hiddenIssue.value = '';
-            }
-            checkSubmitState();
+        // Listeners
+        deviceSelect.addEventListener('change', updateIssues);
+
+        issueSelect.addEventListener('change', function () {
+            customBlock.style.display = this.value === 'custom_cloud' ? 'block' : 'none';
         });
 
-        // --- Submit State Check ---
-        function checkSubmitState() {
-            analyzeBtn.disabled = !(hiddenDevice.value && (hiddenIssue.value || customQuery.value.trim().length > 0));
-        }
+        // Run once on load to populate the first time
+        updateIssues();
 
-        // --- Form Submission (AJAX) ---
+        // --- NEW AJAX SUBMISSION LOGIC ---
+        const form = document.querySelector('form');
+        const analyzeBtn = document.querySelector('button[type="submit"]');
+        const outputContainer = document.getElementById('output-container');
+        const apiOutput = document.getElementById('api-output');
+        const loadingIndicator = document.getElementById('loading-indicator');
+
         form.addEventListener('submit', async function (e) {
-            e.preventDefault();
+            e.preventDefault(); // Prevent the page from reloading
 
-            // Hide step 2, show loading
-            step2.classList.remove('active-step');
-            step2.classList.add('hidden');
-            resultsSection.classList.remove('visible');
-            loadingSection.classList.add('visible');
+            // Show loading state and disable button
+            analyzeBtn.disabled = true;
+            analyzeBtn.textContent = "Analyzing...";
+            outputContainer.style.display = 'none';
+            loadingIndicator.style.display = 'block';
 
+            // Gather form data
             const formData = new FormData(form);
 
             try {
+                // Send request to Flask backend
                 const response = await fetch('/', {
                     method: 'POST',
                     body: formData
@@ -243,67 +163,20 @@
 
                 const data = await response.json();
 
-                // Show results
-                loadingSection.classList.remove('visible');
-                resultsCard.classList.remove('error-card');
-                resultsIcon.textContent = '✅';
-                resultsTitle.textContent = 'Diagnosis Complete';
-                resultsBody.textContent = data.response;
-
-                // Repairability Logic
-                const score = data.repairability_score || 0;
-                document.getElementById('repair-score-text').textContent = score;
-                const fill = document.getElementById('repair-slider-fill');
-                const label = document.getElementById('repair-label');
-                document.getElementById('repairability-section').style.display = 'block';
-
-                setTimeout(() => {
-                    fill.style.width = (score * 10) + '%';
-                }, 100);
-
-                if (score >= 8) {
-                    fill.style.backgroundColor = '#ff3b30'; // Red
-                    label.textContent = 'High Severity';
-                    label.style.color = '#ff3b30';
-                } else if (score >= 4) {
-                    fill.style.backgroundColor = '#ff9500'; // Orange
-                    label.textContent = 'Moderate Severity';
-                    label.style.color = '#ff9500';
-                } else {
-                    fill.style.backgroundColor = '#34c759'; // Green
-                    label.textContent = 'Low Severity (Easy Fix)';
-                    label.style.color = '#34c759';
-                }
-
-                resultsSection.classList.add('visible');
+                // Hide loading, show result
+                loadingIndicator.style.display = 'none';
+                apiOutput.textContent = data.response;
+                outputContainer.style.display = 'block';
 
             } catch (error) {
-                loadingSection.classList.remove('visible');
-                resultsCard.classList.add('error-card');
-                resultsIcon.textContent = '⚠️';
-                resultsTitle.textContent = 'Connection Error';
-                resultsBody.textContent = 'Error connecting to server. Please try again.';
-                document.getElementById('repairability-section').style.display = 'none';
-                resultsSection.classList.add('visible');
+                loadingIndicator.style.display = 'none';
+                apiOutput.textContent = "Error connecting to server. Please try again.";
+                outputContainer.style.display = 'block';
+            } finally {
+                // Reset button
+                analyzeBtn.disabled = false;
+                analyzeBtn.textContent = "Analyze";
             }
-        });
-
-        // --- Diagnose Another ---
-        diagnoseAnotherBtn.addEventListener('click', () => {
-            // Reset everything
-            hiddenDevice.value = '';
-            hiddenIssue.value = '';
-            customQuery.value = '';
-            analyzeBtn.disabled = true;
-            analyzeBtn.textContent = 'Analyze Issue';
-
-            // Reset slider for next diagnosis
-            document.getElementById('repairability-section').style.display = 'none';
-            document.getElementById('repair-slider-fill').style.width = '0%';
-
-            resultsSection.classList.remove('visible');
-            step1.classList.remove('hidden');
-            step1.classList.add('active-step');
         });
     </script>
 </body>
